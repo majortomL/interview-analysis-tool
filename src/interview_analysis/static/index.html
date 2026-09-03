@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Interview Analysis Tool</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Startseite">
+      <span class="brand-mark">IA</span>
+      <span><strong>Interview Analysis Tool</strong><small>lokal · nachvollziehbar · offen</small></span>
+    </a>
+    <div class="project-switcher">
+      <label for="project-select">Projekt</label>
+      <select id="project-select"></select>
+      <button id="new-project-btn" type="button">Neues Projekt</button>
+    </div>
+    <span id="global-status" role="status">Bereit</span>
+  </header>
+
+  <div id="empty-state" class="empty-state hidden">
+    <div class="empty-card">
+      <span class="eyebrow">Willkommen</span>
+      <h1>Vom Audio zur nachvollziehbaren thematischen Analyse</h1>
+      <p>Alle Daten bleiben standardmäßig auf diesem Rechner. Lege dein erstes Projekt an, importiere Interviews und arbeite die vier Schritte nacheinander ab.</p>
+      <button id="empty-new-project-btn" class="primary large" type="button">Projekt anlegen</button>
+    </div>
+  </div>
+
+  <div id="app-shell" class="app-shell hidden">
+    <aside class="workflow-sidebar">
+      <div class="project-title">
+        <span class="eyebrow">Aktuelles Projekt</span>
+        <h1 id="project-name">–</h1>
+      </div>
+      <nav class="workflow" aria-label="Workflow">
+        <button class="step active" data-view="import"><span>1</span><b>Importieren</b><small>Projekt und Audios</small></button>
+        <button class="step" data-view="transcribe"><span>2</span><b>Transkribieren</b><small>Lokale Spracherkennung</small></button>
+        <button class="step" data-view="review"><span>3</span><b>Überprüfen</b><small>Text und Sprecherrollen</small></button>
+        <button class="step" data-view="analyse"><span>4</span><b>Analysieren</b><small>Codes, Memos und Themen</small></button>
+      </nav>
+      <div class="sidebar-footer">
+        <a id="export-link" class="button ghost" href="#">Projekt ohne Audio exportieren</a>
+        <a id="export-media-link" class="button ghost" href="#">Vollständiges Backup</a>
+      </div>
+    </aside>
+
+    <main>
+      <section id="import-view" class="view active">
+        <div class="page-heading">
+          <div><span class="eyebrow">Schritt 1</span><h2>Projekt einrichten</h2></div>
+          <button id="save-settings-btn" type="button">Einstellungen speichern</button>
+        </div>
+        <div class="two-column">
+          <form id="settings-form" class="panel form-grid">
+            <h3>Transkription</h3>
+            <label>Sprache
+              <select id="setting-language">
+                <option value="auto">Automatisch erkennen</option>
+                <option value="de">Deutsch</option>
+                <option value="en">Englisch</option>
+                <option value="fr">Französisch</option>
+                <option value="es">Spanisch</option>
+                <option value="it">Italienisch</option>
+              </select>
+            </label>
+            <label>Whisper-Modell
+              <select id="setting-model">
+                <option value="tiny">tiny · sehr schnell</option>
+                <option value="base">base</option>
+                <option value="small">small · empfohlen</option>
+                <option value="medium">medium</option>
+                <option value="large-v3">large-v3 · höchste Anforderungen</option>
+              </select>
+            </label>
+            <label>Gerät
+              <select id="setting-device"><option value="auto">Automatisch</option><option value="cpu">CPU</option><option value="cuda">NVIDIA CUDA</option></select>
+            </label>
+            <label>Rechentyp
+              <select id="setting-compute"><option value="auto">Automatisch</option><option value="int8">int8</option><option value="float16">float16</option><option value="float32">float32</option></select>
+            </label>
+            <label class="span-2">Kontexthinweis für Whisper
+              <textarea id="setting-prompt" rows="4" placeholder="Optional: Fachgebiet, Eigennamen und häufige Begriffe"></textarea>
+            </label>
+            <label class="check span-2"><input id="setting-diarize" type="checkbox"> Automatische Sprechertrennung verwenden (optional, benötigt pyannote und HF_TOKEN)</label>
+          </form>
+          <div class="panel upload-panel">
+            <h3>Interviewaufnahmen</h3>
+            <p>Unterstützt werden MP3, M4A, WAV, MP4, AAC, FLAC und OGG.</p>
+            <label class="dropzone" for="audio-files">
+              <strong>Audiodateien auswählen</strong>
+              <span>oder hierher ziehen</span>
+              <input id="audio-files" type="file" accept="audio/*,.m4a,.mp4" multiple hidden>
+            </label>
+            <button id="upload-btn" class="primary wide" type="button">Ausgewählte Dateien importieren</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Importierte Interviews</h3>
+          <div id="imported-list" class="interview-grid"></div>
+        </div>
+      </section>
+
+      <section id="transcribe-view" class="view">
+        <div class="page-heading"><div><span class="eyebrow">Schritt 2</span><h2>Transkribieren</h2><p>Die Verarbeitung läuft lokal. Beim ersten Start wird das gewählte Modell heruntergeladen.</p></div></div>
+        <div id="transcription-list" class="job-list"></div>
+      </section>
+
+      <section id="review-view" class="view">
+        <div class="page-heading">
+          <div><span class="eyebrow">Schritt 3</span><h2>Transkript überprüfen</h2></div>
+          <div class="inline-actions"><select id="review-interview"></select><button id="save-transcript-btn" type="button">Transkript speichern</button></div>
+        </div>
+        <div id="review-empty" class="notice hidden">Transkribiere zuerst mindestens ein Interview.</div>
+        <div id="review-workspace">
+          <div class="audio-bar"><audio id="audio-player" controls></audio><span id="review-progress"></span><button id="add-segment-btn" class="ghost" type="button">Segment am Abspielpunkt</button><button id="review-all-btn" class="ghost" type="button">Alle sichtbaren als geprüft markieren</button></div>
+          <div id="segment-list" class="segments"></div>
+        </div>
+      </section>
+
+      <section id="analyse-view" class="view">
+        <div class="page-heading">
+          <div><span class="eyebrow">Schritt 4</span><h2>Reflexive thematische Analyse</h2></div>
+          <div class="inline-actions"><button id="save-analysis-btn" type="button">Analyse speichern</button><a id="ai-export-link" class="button ghost" href="#">KI-Vorschläge vorbereiten</a><button id="ai-import-btn" class="ghost" type="button">KI-Ergebnis importieren</button><input id="ai-file" type="file" accept="application/json,.json" hidden></div>
+        </div>
+        <div class="analysis-context panel">
+          <label>Forschungsfrage<input id="research-question" placeholder="Welche Frage leitet die Analyse?"></label>
+          <label>Reflexionsmemo<textarea id="reflexive-memo" rows="3" placeholder="Vorannahmen, Entscheidungen, Irritationen und Veränderungen festhalten …"></textarea></label>
+        </div>
+        <div class="analysis-layout">
+          <div class="panel source-panel">
+            <div class="panel-heading"><h3>Material</h3><select id="analysis-interview"></select></div>
+            <div id="analysis-warning" class="notice hidden"></div>
+            <div id="analysis-segments" class="analysis-segments"></div>
+          </div>
+          <aside class="analysis-sidebar">
+            <div id="selection-box" class="panel selection-box hidden">
+              <span class="eyebrow">Ausgewählte Passage</span><blockquote id="selection-text"></blockquote>
+              <div id="selection-codes" class="chip-list"></div>
+              <button id="new-code-selection-btn" class="wide" type="button">Neuen Code anlegen</button>
+            </div>
+            <div class="panel">
+              <div class="panel-heading"><h3>Codebuch</h3><button id="new-code-btn" class="small" type="button">+ Code</button></div>
+              <div id="code-list" class="stack-list"></div>
+            </div>
+            <div id="suggestion-panel" class="panel hidden">
+              <div class="panel-heading"><h3>KI-Vorschläge</h3><span id="suggestion-count" class="status">0</span></div>
+              <p class="muted">Vorschläge werden erst nach deiner Bestätigung zu Codierungen.</p>
+              <div id="suggestion-list" class="stack-list"></div>
+            </div>
+            <div class="panel">
+              <div class="panel-heading"><h3>Themen</h3><button id="new-theme-btn" class="small" type="button">+ Thema</button></div>
+              <div id="theme-list" class="stack-list"></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="project-dialog">
+    <form id="project-form" method="dialog">
+      <div class="dialog-heading"><h2>Neues Projekt</h2><button class="icon dialog-close" type="button" aria-label="Schließen">×</button></div>
+      <label>Projektname<input id="new-project-name" required maxlength="120" autofocus></label>
+      <label>Sprache<select id="new-project-language"><option value="de">Deutsch</option><option value="en">Englisch</option><option value="auto">Automatisch</option></select></label>
+      <footer><button class="dialog-close ghost" type="button">Abbrechen</button><button class="primary" type="submit">Projekt anlegen</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="code-dialog">
+    <form id="code-form" method="dialog">
+      <div class="dialog-heading"><h2 id="code-dialog-title">Code</h2><button class="icon code-close" type="button" aria-label="Schließen">×</button></div>
+      <input id="code-id" type="hidden">
+      <label>Name<input id="code-name" required maxlength="160"></label>
+      <label>Beschreibung<textarea id="code-description" rows="4"></textarea></label>
+      <label>Farbe<input id="code-color" type="color" value="#7357c6"></label>
+      <footer><button id="delete-code-btn" class="danger hidden" type="button">Löschen</button><span class="spacer"></span><button class="code-close ghost" type="button">Abbrechen</button><button type="submit">Speichern</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="theme-dialog">
+    <form id="theme-form" method="dialog">
+      <div class="dialog-heading"><h2 id="theme-dialog-title">Thema</h2><button class="icon theme-close" type="button" aria-label="Schließen">×</button></div>
+      <input id="theme-id" type="hidden">
+      <label>Name<input id="theme-name" required maxlength="160"></label>
+      <label>Beschreibung<textarea id="theme-description" rows="4"></textarea></label>
+      <fieldset><legend>Zugeordnete Codes</legend><div id="theme-code-options" class="check-list"></div></fieldset>
+      <footer><button id="delete-theme-btn" class="danger hidden" type="button">Löschen</button><span class="spacer"></span><button class="theme-close ghost" type="button">Abbrechen</button><button type="submit">Speichern</button></footer>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+services:
+  interview-analysis:
+    build:
+      context: .
+      args:
+        INSTALL_EXTRAS: asr
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${INTERVIEW_ANALYSIS_PORT:-8080}:8080"
+    environment:
+      INTERVIEW_ANALYSIS_DATA_DIR: /data
+      INTERVIEW_ANALYSIS_WORKERS: "1"
+      INTERVIEW_ANALYSIS_MAX_UPLOAD_MB: "2048"
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - interview-analysis-data:/data
+
+volumes:
+  interview-analysis-data:
