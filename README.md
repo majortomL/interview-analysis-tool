@@ -21,6 +21,8 @@ docker compose up --build
 
 Open <http://127.0.0.1:8080>. Project data is stored in the Docker volume `interview-analysis-data` and survives container rebuilds.
 
+The interface is available in German and English. Use the persistent `DE | EN` switch in the header; this does not change the transcription language of existing projects.
+
 The first transcription downloads the selected Whisper model. CPU transcription works out of the box but can be slow for larger models. The default `small` model is a practical first test.
 
 ## Native Python installation

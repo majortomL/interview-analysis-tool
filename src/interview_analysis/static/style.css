@@ -36,6 +36,9 @@ button.icon { border: 0; background: transparent; color: var(--ink); font-size: 
 .brand-mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: var(--brand); color: #fff; font-weight: 800; }
 .project-switcher { margin-left: auto; display: flex; gap: .55rem; align-items: center; }
 .project-switcher label { color: var(--muted); font-size: .85rem; }
+.language-switcher { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--wash); }
+.language-switcher button { min-width: 2.35rem; border: 0; padding: .35rem .45rem; border-radius: 6px; background: transparent; color: var(--muted); font-size: .78rem; font-weight: 750; }
+.language-switcher button[aria-pressed="true"] { color: #fff; background: var(--brand); }
 #global-status { min-width: 7rem; color: var(--muted); text-align: right; font-size: .9rem; }
 
 .empty-state { min-height: calc(100vh - 72px); display: grid; place-items: center; padding: 2rem; }
@@ -170,6 +173,7 @@ fieldset { border: 1px solid var(--line); border-radius: 8px; }
 @media (max-width: 720px) {
   .topbar { align-items: stretch; flex-direction: column; position: static; }
   .project-switcher { margin-left: 0; flex-wrap: wrap; }
+  .language-switcher { width: fit-content; }
   #global-status { text-align: left; }
   .workflow { grid-template-columns: 1fr 1fr; }
   main { padding: 1rem; }

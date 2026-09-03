@@ -39,3 +39,18 @@ def test_security_headers_and_health(tmp_path):
     assert response.get_json()["status"] == "ok"
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
+
+
+def test_ai_bundle_uses_requested_language(tmp_path):
+    app = create_app(tmp_path)
+    app.config.update(TESTING=True)
+    client = app.test_client()
+    project_id = client.post("/api/projects", json={"name": "Synthetic project"}).get_json()["id"]
+
+    german = client.get(f"/api/projects/{project_id}/ai-bundle.json?language=de").get_json()
+    english = client.get(f"/api/projects/{project_id}/ai-bundle.json?language=en").get_json()
+
+    assert german["language"] == "de"
+    assert "Interviewtexte" in german["privacy_warning"]
+    assert english["language"] == "en"
+    assert "interview text" in english["privacy_warning"]

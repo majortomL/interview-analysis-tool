@@ -151,7 +151,7 @@ def create_app(data_dir: Path | str | None = None) -> Flask:
 
     @app.get("/api/projects/<project_id>/ai-bundle.json")
     def ai_bundle(project_id: str):
-        payload = build_ai_bundle(store(), project_id)
+        payload = build_ai_bundle(store(), project_id, request.args.get("language", "en"))
         buffer = io.BytesIO(json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
         return send_file(
             buffer,
@@ -210,7 +210,7 @@ def run_job(app: Flask, job_id: str) -> None:
             )
 
 
-def build_ai_bundle(project_store: ProjectStore, project_id: str) -> dict[str, Any]:
+def build_ai_bundle(project_store: ProjectStore, project_id: str, language: str = "en") -> dict[str, Any]:
     project = project_store.get_project(project_id)
     corpus = []
     for interview in project.get("interviews", []):
@@ -230,20 +230,39 @@ def build_ai_bundle(project_store: ProjectStore, project_id: str) -> dict[str, A
             if segment.get("reviewed") and not segment.get("deleted") and segment.get("text", "").strip()
         ]
         corpus.append({"interview_id": interview["id"], "name": interview["name"], "segments": segments})
+    german = language == "de"
     return {
         "schema_version": 1,
-        "purpose": "Provisional coding suggestions for reflexive thematic analysis",
+        "language": "de" if german else "en",
+        "purpose": (
+            "Vorläufige Codiervorschläge für eine reflexive thematische Analyse"
+            if german
+            else "Provisional coding suggestions for reflexive thematic analysis"
+        ),
         "privacy_warning": (
-            "This file contains interview text. Upload it to an external service only when your consent, "
+            "Diese Datei enthält Interviewtexte. Lade sie nur zu einem externen Dienst hoch, wenn Einwilligung, "
+            "Datenschutzgrundlage und institutionelle Vorgaben diese Übertragung erlauben."
+            if german
+            else "This file contains interview text. Upload it to an external service only when your consent, "
             "data-protection basis, and institutional policy permit that transfer."
         ),
-        "instructions": [
-            "Read the complete corpus before suggesting codes.",
-            "Use an inductive, reflexive thematic analysis orientation.",
-            "Return JSON only and follow output_schema exactly.",
-            "Every quote must be an exact contiguous substring of the referenced segment text.",
-            "Suggestions are provisional and must be reviewed by the researcher.",
-        ],
+        "instructions": (
+            [
+                "Lies den vollständigen Korpus, bevor du Codes vorschlägst.",
+                "Arbeite induktiv und orientiere dich an reflexiver thematischer Analyse.",
+                "Gib ausschließlich JSON zurück und halte output_schema exakt ein.",
+                "Jedes Zitat muss eine exakte zusammenhängende Teilzeichenfolge des referenzierten Segments sein.",
+                "Vorschläge sind vorläufig und müssen durch die forschende Person geprüft werden.",
+            ]
+            if german
+            else [
+                "Read the complete corpus before suggesting codes.",
+                "Use an inductive, reflexive thematic analysis orientation.",
+                "Return JSON only and follow output_schema exactly.",
+                "Every quote must be an exact contiguous substring of the referenced segment text.",
+                "Suggestions are provisional and must be reviewed by the researcher.",
+            ]
+        ),
         "output_schema": {
             "codes": [{"name": "string", "description": "string", "color": "#RRGGBB"}],
             "themes": [{"name": "string", "description": "string", "code_names": ["string"]}],
