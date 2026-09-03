@@ -248,12 +248,14 @@ class ProjectStore:
 
         return self.mutate_project(project_id, update)
 
-    def add_interview(self, project_id: str, upload: FileStorage) -> dict[str, Any]:
+    def add_interview(self, project_id: str, upload: FileStorage, name: str | None = None) -> dict[str, Any]:
         original_name = secure_filename(upload.filename or "")
         suffix = Path(original_name).suffix.lower()
         if suffix not in ALLOWED_AUDIO_EXTENSIONS:
             allowed = ", ".join(sorted(ALLOWED_AUDIO_EXTENSIONS))
             raise InvalidData(f"unsupported audio format; allowed: {allowed}")
+
+        clean_name = str(name or "").strip()[:120]
 
         interview_id = new_id("interview")
         interview_dir = self.project_dir(project_id) / "interviews" / interview_id
@@ -263,7 +265,7 @@ class ProjectStore:
         now = utc_now()
         record = {
             "id": interview_id,
-            "name": Path(original_name).stem[:120] or interview_id,
+            "name": clean_name or Path(original_name).stem[:120] or interview_id,
             "source_filename": original_name,
             "media_filename": media_name,
             "status": "uploaded",
@@ -306,6 +308,35 @@ class ProjectStore:
         self.mutate_project(project_id, update)
         assert found is not None
         return found
+
+    def delete_interview(self, project_id: str, interview_id: str) -> None:
+        _require_id(interview_id)
+        analysis_path = self.analysis_path(project_id)
+        if analysis_path.exists():
+            analysis = self.read_json(analysis_path)
+            if any(
+                item.get("interview_id") == interview_id
+                for item in [*analysis.get("codings", []), *analysis.get("suggestions", [])]
+            ):
+                raise Conflict(
+                    "this interview is referenced by codings or AI suggestions; "
+                    "remove those references before deleting it"
+                )
+
+        removed = False
+
+        def remove(project: dict[str, Any]) -> None:
+            nonlocal removed
+            before = len(project.get("interviews", []))
+            project["interviews"] = [
+                interview for interview in project.get("interviews", []) if interview.get("id") != interview_id
+            ]
+            removed = len(project["interviews"]) != before
+
+        self.mutate_project(project_id, remove)
+        if not removed:
+            raise NotFound("unknown interview")
+        shutil.rmtree(self.project_dir(project_id) / "interviews" / interview_id, ignore_errors=True)
 
     def source_audio_path(self, project_id: str, interview_id: str) -> Path:
         interview = self.find_interview(project_id, interview_id)

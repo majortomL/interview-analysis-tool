@@ -15,7 +15,7 @@ from flask import Flask, jsonify, request, send_file
 
 from interview_analysis import __version__
 from interview_analysis.storage import Conflict, InvalidData, NotFound, ProjectStore, StorageError, utc_now
-from interview_analysis.transcription import transcribe_interview
+from interview_analysis.transcription import detect_gpu, transcribe_interview
 
 
 def create_app(data_dir: Path | str | None = None) -> Flask:
@@ -60,6 +60,10 @@ def create_app(data_dir: Path | str | None = None) -> Flask:
     def health():
         return jsonify({"status": "ok", "version": __version__})
 
+    @app.get("/api/system")
+    def system_info():
+        return jsonify({"gpu": detect_gpu()})
+
     @app.get("/api/projects")
     def list_projects():
         return jsonify(store().list_projects())
@@ -83,8 +87,26 @@ def create_app(data_dir: Path | str | None = None) -> Flask:
         uploads = request.files.getlist("audio")
         if not uploads:
             raise InvalidData("at least one audio file is required")
-        records = [store().add_interview(project_id, upload) for upload in uploads]
+        names = request.form.getlist("names")
+        records = [
+            store().add_interview(project_id, upload, names[index] if index < len(names) else None)
+            for index, upload in enumerate(uploads)
+        ]
         return jsonify(records), 201
+
+    @app.delete("/api/projects/<project_id>/interviews/<interview_id>")
+    def delete_interview_route(project_id: str, interview_id: str):
+        with app.config["JOBS_LOCK"]:
+            active = any(
+                job["project_id"] == project_id
+                and job["interview_id"] == interview_id
+                and job["status"] in {"queued", "running"}
+                for job in app.config["JOBS"].values()
+            )
+        if active:
+            raise Conflict("a transcription job is running for this interview; wait for it to finish first")
+        store().delete_interview(project_id, interview_id)
+        return "", 204
 
     @app.get("/api/projects/<project_id>/interviews/<interview_id>/audio")
     def audio(project_id: str, interview_id: str):
@@ -123,7 +145,6 @@ def create_app(data_dir: Path | str | None = None) -> Flask:
                 "status": "queued",
                 "stage": "queued",
                 "percent": 0,
-                "message": "Wartet auf Verarbeitung",
                 "error": None,
                 "created_at": utc_now(),
                 "updated_at": utc_now(),
@@ -140,6 +161,16 @@ def create_app(data_dir: Path | str | None = None) -> Flask:
             if not job:
                 raise NotFound("unknown transcription job")
             return jsonify(job.copy())
+
+    @app.get("/api/projects/<project_id>/jobs")
+    def list_active_jobs(project_id: str):
+        with app.config["JOBS_LOCK"]:
+            jobs = [
+                job.copy()
+                for job in app.config["JOBS"].values()
+                if job["project_id"] == project_id and job["status"] in {"queued", "running"}
+            ]
+        return jsonify(jobs)
 
     @app.get("/api/projects/<project_id>/analysis")
     def analysis(project_id: str):
@@ -204,7 +235,7 @@ def run_job(app: Flask, job_id: str) -> None:
             update_job(app, job_id, status="done", stage="done", percent=100)
         except Exception as exc:  # background boundary: persist a user-visible error
             message = str(exc)[:1_000] or exc.__class__.__name__
-            update_job(app, job_id, status="failed", stage="failed", message=message, error=message)
+            update_job(app, job_id, status="failed", stage="failed", error=message)
             store_from_app(app).update_interview(
                 job["project_id"], job["interview_id"], status="failed", error=message
             )

@@ -22,13 +22,34 @@ def _register_nvidia_dll_dirs() -> None:
     if sys.platform != "win32":
         return
     for package in ("nvidia.cublas", "nvidia.cudnn"):
-        spec = importlib.util.find_spec(package)
+        try:
+            spec = importlib.util.find_spec(package)
+        except ModuleNotFoundError:
+            # the "nvidia" namespace package itself isn't installed (no CUDA pip
+            # packages present) - find_spec raises instead of returning None here.
+            continue
         if not spec or not spec.submodule_search_locations:
             continue
         for location in spec.submodule_search_locations:
             bin_dir = os.path.join(location, "bin")
             if os.path.isdir(bin_dir):
                 os.add_dll_directory(bin_dir)
+
+
+def detect_gpu() -> dict[str, Any]:
+    """Report whether this process can currently use a CUDA GPU for transcription."""
+    _register_nvidia_dll_dirs()
+    try:
+        import ctranslate2
+    except ImportError:
+        return {"cuda_available": False, "device_count": 0, "reason": "asr_not_installed"}
+    try:
+        count = ctranslate2.get_cuda_device_count()
+    except RuntimeError:
+        return {"cuda_available": False, "device_count": 0, "reason": "cuda_runtime_error"}
+    if count > 0:
+        return {"cuda_available": True, "device_count": count, "reason": None}
+    return {"cuda_available": False, "device_count": 0, "reason": "no_device"}
 
 
 def _resolve_device(requested: str) -> str:
@@ -150,19 +171,19 @@ def transcribe_interview(
     interview_dir = store.project_dir(project_id) / "interviews" / interview_id
     prepared = interview_dir / "audio_16k.wav"
     if progress:
-        progress(stage="preparing", percent=2, message="Audio wird vorbereitet")
+        progress(stage="preparing", percent=2)
     _prepare_audio(source, prepared)
     duration = _audio_duration(prepared)
     store.update_interview(project_id, interview_id, duration_seconds=duration, status="transcribing")
 
     if progress:
-        progress(stage="loading_model", percent=5, message=f"Modell {model_name} wird geladen")
+        progress(stage="loading_model", percent=5)
     model = _load_model(model_name, device, compute_type)
     diarization_pipeline = _load_diarization(bool(settings.get("diarize", False)))
     diarization = None
     if diarization_pipeline is not None:
         if progress:
-            progress(stage="diarizing", percent=8, message="Sprecher werden unterschieden")
+            progress(stage="diarizing", percent=8)
         diarization = diarization_pipeline(str(prepared))
 
     segments, info = model.transcribe(
@@ -193,7 +214,7 @@ def transcribe_interview(
         )
         if progress and duration:
             percent = min(98, 10 + int(88 * end / duration))
-            progress(stage="transcribing", percent=percent, message="Transkription läuft")
+            progress(stage="transcribing", percent=percent)
 
     transcript = {
         "schema_version": 1,
@@ -218,5 +239,5 @@ def transcribe_interview(
     store.save_generated_transcript(project_id, interview_id, transcript)
     store.update_interview(project_id, interview_id, status="needs_review", error=None)
     if progress:
-        progress(stage="done", percent=100, message="Transkription abgeschlossen")
+        progress(stage="done", percent=100)
     return transcript

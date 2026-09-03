@@ -10,6 +10,8 @@ A local-first, self-hosted workflow for qualitative interview research:
 
 The application is an early **V1 alpha**. It is designed for a single researcher or a trusted team sharing one deployment. It does not send interview data to a cloud service by itself.
 
+The frontend is a small React app (via the `htm` tagged-template helper, no JSX) loaded directly as a `<script>` tag. React, ReactDOM, and `htm` are vendored under `src/interview_analysis/static/vendor/`; there is no npm dependency, bundler, or build step for the UI.
+
 ## Quick start with Docker
 
 Requirements: Docker Desktop or Docker Engine with Compose.
@@ -55,21 +57,21 @@ interview-analysis serve --data-dir /path/to/private/project-data
 
 ### 1. Import
 
-Create a project, select the interview language and Whisper model, then upload one or more recordings. Supported formats are MP3, M4A, WAV, MP4, AAC, FLAC, and OGG.
+Create a project, select the interview language and Whisper model, then add one or more recordings — via the file picker or by dragging files onto the drop zone (multiple drops accumulate into one removable list). Supported formats are MP3, M4A, WAV, MP4, AAC, FLAC, and OGG. Each import batch requires a transcription name, prefilled with an incrementing "Transcription N" and applied per file when importing several at once.
 
 ### 2. Transcribe
 
-Each recording is normalized to mono 16 kHz audio before local ASR. The transcript records the model, engine version, device, language detection, and confidence values. Jobs run sequentially by default to avoid exhausting GPU memory.
+Each recording is normalized to mono 16 kHz audio before local ASR. The transcript records the model, engine version, device, language detection, and confidence values. Jobs run sequentially by default to avoid exhausting GPU memory. Use **Transcribe all** to queue every not-yet-transcribed recording at once. Progress bars survive a page reload (the app re-attaches to any job still running on the server).
 
 ### 3. Review
 
-Listen to the recording, correct the draft, assign a speaker role, and mark every retained segment as reviewed. Analysis is enabled only after all retained segments have a speaker role and are reviewed.
+Listen to the recording, correct the draft, assign a speaker role, and mark every retained segment as reviewed. The segment matching the current playback position is highlighted automatically, and each segment has a play button that jumps the audio to its start. Analysis is enabled only after all retained segments have a speaker role and are reviewed.
 
 Raw ASR text is retained separately from corrected text. Saves are atomic, versioned, and rejected when another browser has already saved a newer revision.
 
 ### 4. Analyse
 
-Record the research question and reflexive memo, select passages, create codes, and group codes into candidate themes. Codings reference stable interview and segment IDs plus exact quote offsets.
+Record the research question and reflexive memo, select passages, create codes, and group codes into candidate themes. Codings reference stable interview and segment IDs plus exact quote offsets. Hover over a code in the codebook to isolate its highlights in the transcript and dim every other code.
 
 The **Prepare AI suggestions** export contains all reviewed transcript text. It includes a machine-readable prompt and result schema. The application never uploads that file. Only give it to an external model if participant consent, institutional policy, and the applicable data-protection basis permit the transfer. Imported results remain suggestions until individually accepted.
 
@@ -90,6 +92,16 @@ For Docker, change the build argument in `docker-compose.yml` from `asr` to `asr
 ## NVIDIA GPU
 
 The application selects CUDA automatically when CTranslate2 reports a usable GPU; otherwise it uses CPU/int8. The portable Docker image is CPU-oriented. For GPU use, native installation is currently recommended; a CUDA base image and GPU reservation must be configured deliberately for a GPU-enabled container.
+
+The Import step shows a live GPU status line so you can see whether CUDA is available before you start a transcription.
+
+If a GPU is detected but transcription fails with `Library cublas64_12.dll is not found or cannot be loaded` (or a similar `cudnn`/`libcublas` message), CTranslate2 can see the card through the driver but the CUDA runtime libraries themselves are missing — they are not bundled in the Windows/Linux wheels. Install them into the same virtual environment:
+
+```bash
+pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+```
+
+Then restart the server. If you'd rather not manage CUDA runtime libraries, set the project's "Device" setting to `CPU` instead of `Automatic`/`NVIDIA CUDA` — transcription will be slower but works without any extra installation.
 
 ## Data layout and backups
 
@@ -143,7 +155,7 @@ The tests use generated metadata and dummy bytes only. Real interview material m
 - JSON project schema version 1; migrations will be required before incompatible changes;
 - no REFI-QDA/QDPX interoperability yet;
 - no collaborative coding or inter-coder comparison features;
-- UI currently available in German.
+- interface available in German and English only; other languages require a translation contribution.
 
 Contributions and issue reports are welcome. Please do not attach interview data, logs containing interview text, tokens, or other confidential material to public issues.
 
