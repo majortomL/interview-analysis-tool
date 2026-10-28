@@ -25,7 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 asr = ["faster-whisper>=1.0,<2"]
-diarization = ["faster-whisper>=1.0,<2", "pyannote.audio>=3.1,<4"]
+diarization = ["faster-whisper>=1.0,<2", "pyannote.audio>=3.1,<5"]
 dev = [
   "build>=1.2,<2",
   "pytest>=8,<9",
